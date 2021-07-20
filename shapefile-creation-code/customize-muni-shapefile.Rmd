@@ -1,0 +1,76 @@
+---
+title: ''
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(rgdal)
+library(tidyverse)
+
+#set downloads path for whoever is downloading the source file (see notes below)
+downloads_path <- keyring::key_get('downloads_path')
+
+```
+
+Source for the municipality shapefile is the Cook County GIS Department. The file is available online through the GIS Department's Open Data Portal [here](https://hub-cookcountyil.opendata.arcgis.com/datasets/534226c6b1034985aca1e14a2eb234af_2/explore?location=41.811250%2C-87.890600%2C10.56). The shapefile has been exported from this site and imported below for cleaning.
+
+*Note: In future versions of this script, manual exporting of the shapefile could potentially be eliminated. For future iterations, explore importing the file via geojson or the arcgisbindings package.*
+
+```{r import}
+
+#import downloaded source file from GIS dept
+raw_munis <- readOGR(dsn = paste0(downloads_path, "Municipality"), layer = "Municipality")
+
+#import CCDPH standard municipality data set
+muni_data <- read_csv("https://github.com/Cook-County-Department-of-Public-Health/ccdph-data-sets/blob/main/Municipality%20Populations.csv?raw=TRUE")
+
+```
+
+Create custom fields for CCDPH use
+
+```{r clean}
+
+#make sure all municipality names match between shapefile and data set and all towns are accounted for in both datasets
+raw_munis@data[!(raw_munis@data$MUNICIPALI %in% muni_data$Municipality) & !is.na("raw_munis@data$MUNICIPALI"), "MUNICIPALI"]
+muni_data[!(muni_data$Municipality %in% raw_munis@data$MUNICIPALI), ]
+
+#Fix McCook Spelling
+mccook_index = which(raw_munis@data$MUNICIPALI == "Mc Cook")
+raw_munis@data$MUNICIPALI = as.character(raw_munis@data$MUNICIPALI)
+raw_munis@data$MUNICIPALI[mccook_index] = "McCook"
+
+#create fresh copy to modify
+munis_customized <- raw_munis 
+
+#link to muni data and create variables  
+munis_customized@data <- munis_customized@data %>%
+  #rename_with(~paste0(.x, "_gis_dept")) %>%
+  left_join(muni_data, by = c("MUNICIPALI" = "Municipality")) %>%
+  janitor::clean_names() %>%
+  select(muni_name = municipali,
+         pop_2010 = population2010,
+         district,
+         partial,
+         exclude = exclude_from_analysis,
+         fips = census_place_code,
+         gis_agncy = agency, 
+         gis_name = agency_des,
+         gis_area = shapest_are,
+         gis_leng = shapest_len
+         )
+
+```
+
+Export customized shapefile in state plane and WGS projections. State plane projection was verified in ArcPro by overlaying with GIS Dept raw muni file.
+
+```{r export}
+
+writeOGR(obj=munis_customized, dsn = paste0(getwd(), "/epsg-3435-illinois-stateplane-east"), layer = "ccdph-cook-county-munis", driver = "ESRI Shapefile")
+
+```
+
+
