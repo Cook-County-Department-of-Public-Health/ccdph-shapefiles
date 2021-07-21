@@ -69,7 +69,39 @@ Export customized shapefile in state plane and WGS projections. State plane proj
 
 ```{r export}
 
-writeOGR(obj=munis_customized, dsn = paste0(getwd(), "/epsg-3435-illinois-stateplane-east"), layer = "ccdph-cook-county-munis", driver = "ESRI Shapefile")
+### STATE PLANE FILE ###
+
+#Create directory to hold shapefile
+stateplane_path <- paste0(getwd(), "/epsg-3435-illinois-stateplane-east/ccdph-cook-county-munis")
+dir.create(path = stateplane_path)
+
+#write shapefile
+writeOGR(obj=munis_customized, dsn = stateplane_path, layer = "ccdph-cook-county-munis", driver = "ESRI Shapefile")
+
+#zip shapefile
+zip(zipfile = stateplane_path, files = dir(stateplane_path, full.names = TRUE))
+
+#remove unzipped files
+unlink(stateplane_path, recursive = T)
+
+
+### WGS FILE ###
+
+#Transform file from state plane to WGS
+munis_customized_WGS <- spTransform(munis_customized, CRS("+init=epsg:4326"))
+
+#Create directory to hold shapefile
+wgs_path <- paste0(getwd(), "/epsg-4326-wgs84-for-leaflet/ccdph-cook-county-munis-wgs")
+dir.create(path = wgs_path)
+
+#write shapefile
+writeOGR(obj=munis_customized_WGS, dsn = wgs_path, layer = "ccdph-cook-county-munis-wgs", driver = "ESRI Shapefile")
+
+#zip shapefile
+zip(zipfile = wgs_path, files = dir(wgs_path, full.names = TRUE))
+
+#remove unzipped files
+unlink(wgs_path, recursive = T)
 
 ```
 
